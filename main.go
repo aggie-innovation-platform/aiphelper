@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -21,56 +22,63 @@ import (
 	"github.com/pkg/browser"
 )
 
+type AWSAccountInfo struct {
+	NormalizedAccountName string
+	ssotypes.AccountInfo
+}
+
 var (
-	regionsInput          string
-	regions               []string
-	accountsInput         string
-	accounts              []ssotypes.AccountInfo
-	outputFormatInput     string
-	awsTemplate           *template.Template
-	steampipeTemplate     *template.Template
-	awsTemplateData       *AWSTemplateData
-	steampipeTemplateData *SteampipeTemplateData
-	beginLine             int
-	endLine               int
+	regionsInput      string
+	regions           []string
+	accountsInput     string
+	accounts          []AWSAccountInfo
+	outputFormatInput string
+	awsTemplate       *template.Template
+	steampipeTemplate *template.Template
+	// awsTemplateData       *AWSTemplateData
+	// steampipeTemplateData *SteampipeTemplateData
+	beginLine int
+	endLine   int
 )
 
 type AWSTemplateData struct {
 	SSOStartURL    string
 	SSORegion      string
-	SSOAccountID   string
+	SSOAccountId   string
 	SSORoleName    string
 	AssumeRoleName string
-	AccountList    []ssotypes.AccountInfo
+	AccountList    []AWSAccountInfo
+	DefaultRegion  string
+	DefaultFormat  string
 }
 
 type SteampipeTemplateData struct {
 	Regions           []string
-	AccountList       []ssotypes.AccountInfo
+	AccountList       []AWSAccountInfo
 	AllAccountsString string
 	RegionsString     string
 }
 
+var steampipeTemplateData = SteampipeTemplateData{}
+var awsTemplateData = AWSTemplateData{}
+var templateSectionMarker = "AIPSSOHELPER"
+
 func init() {
-	awsTemplate = template.Must(template.ParseFiles("aws_credentials.tmpl"))
+	awsTemplate = template.Must(template.ParseFiles("aws_config.tmpl"))
 	steampipeTemplate = template.Must(template.ParseFiles("steampipe_aws.spc.tmpl"))
 }
 
 func main() {
-	awsTemplateData := AWSTemplateData{}
-	steampipeTemplateData := SteampipeTemplateData{}
-
 	flag.StringVar(&awsTemplateData.SSOStartURL, "sso-start-url", "", "AWS SSO Start URL")
 	flag.StringVar(&awsTemplateData.SSORegion, "sso-region", "", "AWS SSO Region")
-	flag.StringVar(&awsTemplateData.SSOAccountID, "sso-account-id", "", "AWS SSO Account ID")
 	flag.StringVar(&awsTemplateData.SSORoleName, "sso-role-name", "AdministratorAccess", "SSO Role To Assume (must be the same across all accounts)")
-	flag.StringVar(&awsTemplateData.AssumeRoleName, "assume-role-name", "OrganizationAccountAccessRole", "Name of role to assume in linked account")
 	flag.StringVar(&regionsInput, "regions", "", "Comma-separated list of regions to tell Steampipe to connect to (default: uses same search order as aws cli)")
 	flag.StringVar(&accountsInput, "accounts", "", "Comma-separated list of accounts to tell Steampipe to connect to (default: all accounts assigned to you through SSO)")
-	flag.StringVar(&outputFormatInput, "outputFormat", "json", "Output format for AWS CLI")
+	flag.StringVar(&awsTemplateData.DefaultFormat, "default-aws-format", "json", "Output format for AWS CLI")
+	flag.StringVar(&awsTemplateData.DefaultRegion, "default-aws-region", "us-east-1", "Default region for AWS CLI operations")
 
 	flag.Parse()
-	if awsTemplateData.SSOStartURL == "" || awsTemplateData.SSORegion == "" || awsTemplateData.SSOAccountID == "" {
+	if awsTemplateData.SSOStartURL == "" || awsTemplateData.SSORegion == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -81,7 +89,13 @@ func main() {
 
 	if accountsInput != "" {
 		for _, accountID := range strings.Split(accountsInput, ",") {
-			accounts = append(accounts, ssotypes.AccountInfo{AccountId: &accountID})
+			accounts = append(accounts,
+				AWSAccountInfo{
+					AccountInfo: ssotypes.AccountInfo{
+						AccountId: &accountID,
+					},
+				},
+			)
 		}
 	}
 
@@ -135,7 +149,7 @@ func main() {
 	// create sso client
 	ssoClient := sso.NewFromConfig(cfg)
 	// list accounts
-	fmt.Println("Fetching list of all accounts for user")
+	fmt.Print("Fetching list of all accounts... ")
 
 	accountPaginator := sso.NewListAccountsPaginator(ssoClient, &sso.ListAccountsInput{
 		AccessToken: token.AccessToken,
@@ -146,38 +160,46 @@ func main() {
 			fmt.Println(err)
 		}
 		for _, account := range x.AccountList {
-			if *account.AccountId != awsTemplateData.SSOAccountID {
-				accounts = append(accounts, account)
-				fmt.Printf("\nAccount ID: %v Name: %v\n", aws.ToString(account.AccountId), aws.ToString(account.AccountName))
-			} else {
-				fmt.Println("\nSkipping profile creation for master account")
-			}
+			account := AWSAccountInfo{AccountInfo: account}
+			account.NormalizedAccountName = snakeCase(*account.AccountName)
+			accounts = append(accounts, account)
 		}
 	}
 
-	steampipeTemplateData.AccountList = accounts
-	steampipeTemplateData.RegionsString = strings.Join(regions, "\", \"")
-	for _, account := range accounts {
-		steampipeTemplateData.AllAccountsString = steampipeTemplateData.AllAccountsString + "\"aws_" + *account.AccountId + "\", "
-	}
+	fmt.Printf("User has access to %d AWS accounts.\n", len(accounts))
 
-	steampipeTemplateData.AllAccountsString = strings.Trim(steampipeTemplateData.AllAccountsString, ", ")
+	fmt.Println("Updating AWS config file with profiles.")
+	updateAwsConfigFile()
 
-	// fmt.Println(steampipeTemplateData.AllAccountsString)
+	fmt.Println("Updating Steampipe AWS Plugin config file with connections.")
+	updateSteampipeAwsConfigFile()
 
-	err = steampipeTemplate.Execute(os.Stdout, steampipeTemplateData)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	fmt.Println("Done.")
+}
 
+func snakeCase(str string) string {
+	str = strings.ToLower(str)
+	var match1 = regexp.MustCompile(`[^a-z0-9]`)
+	var match2 = regexp.MustCompile(`(_)*`)
+	str = match1.ReplaceAllString(str, "_")
+	str = match2.ReplaceAllString(str, "${1}")
+	str = strings.Trim(str, "_")
+	return str
+}
+
+func updateAwsConfigFile() {
 	homeDir, _ := os.UserHomeDir()
-	awsCredentialsFilePath := filepath.Join(homeDir, ".aws/credentials")
-	input, err := ioutil.ReadFile(awsCredentialsFilePath)
+	awsConfigFilePath := filepath.Join(homeDir, ".aws/config")
+
+	if _, err := os.Stat(awsConfigFilePath); os.IsNotExist(err) {
+		os.MkdirAll(filepath.Dir(awsConfigFilePath), 0755)
+		os.Create(awsConfigFilePath)
+	}
+
+	input, err := ioutil.ReadFile(awsConfigFilePath)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	lines := strings.Split(string(input), "\n")
 
 	var awsTemplateBuffer bytes.Buffer
 
@@ -187,38 +209,88 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	newLines := strings.Split(awsTemplateBuffer.String(), "\n")
+	output, _ := replaceFileSectionTemplate(string(input), awsTemplateBuffer.String())
+
+	err = ioutil.WriteFile(awsConfigFilePath, []byte(output), 0755)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func updateSteampipeAwsConfigFile() {
+	var spcTemplateBuffer bytes.Buffer
+
+	steampipeTemplateData.AccountList = accounts
+	steampipeTemplateData.RegionsString = strings.Join(regions, "\", \"")
+	for _, account := range accounts {
+		steampipeTemplateData.AllAccountsString = steampipeTemplateData.AllAccountsString + "\"aws_" + *account.AccountId + "\", "
+	}
+
+	steampipeTemplateData.AllAccountsString = strings.Trim(steampipeTemplateData.AllAccountsString, ", ")
+
+	err := steampipeTemplate.Execute(&spcTemplateBuffer, steampipeTemplateData)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	spcFilePath := filepath.Join(homeDir, ".steampipe/config/aws.spc")
+
+	if _, err := os.Stat(spcFilePath); os.IsNotExist(err) {
+		os.MkdirAll(filepath.Dir(spcFilePath), 0755)
+		os.Create(spcFilePath)
+	}
+
+	input, err := ioutil.ReadFile(spcFilePath)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	err = steampipeTemplate.Execute(&spcTemplateBuffer, steampipeTemplateData)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	output, _ := replaceFileSectionTemplate(string(input), spcTemplateBuffer.String())
+
+	err = ioutil.WriteFile(spcFilePath, []byte(output), 0755)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func replaceFileSectionTemplate(fileContents string, newSection string) (string, error) {
+	lines := strings.Split(fileContents, "\n")
+	newLines := strings.Split(newSection, "\n")
 
 	beginLine, endLine := -1, -1
 
 	for i, line := range lines {
-		if line == "### BEGIN_AWSSSOHELPER ###" {
-			fmt.Printf("BEGIN_AWSSSOHELPER found on line %d", i)
+		if line == fmt.Sprintf("### BEGIN_%s ###", templateSectionMarker) {
 			beginLine = i
 		}
-		if line == "### END_AWSSSOHELPER ###" {
-			fmt.Printf("END_AWSSSOHELPER found on line %d", i)
+		if line == fmt.Sprintf("### END_%s ###", templateSectionMarker) {
 			endLine = i
 		}
 	}
 
-	var fileContents []string
+	var newFileContents []string
 	if beginLine == -1 || endLine == -1 {
 		// Append to file
-		fmt.Println("AWSSSOHELPER block not found. Appending new block")
-		fileContents = append(lines, newLines...)
+		// fmt.Println("block not found. Appending new block")
+		newFileContents = append(lines, newLines...)
 	} else {
 		// Replace block in file
-		fmt.Println("Replacing AWSSSOHELPER block")
+		// fmt.Println("Replacing block")
 		contentBefore := lines[0:beginLine]
-		contentAfter := lines[endLine+1 : len(lines)-1]
-		fileContents = append(contentBefore, newLines...)
-		fileContents = append(fileContents, contentAfter...)
+		contentAfter := []string{}
+		if len(lines) > endLine+1 {
+			contentAfter = lines[endLine+1 : len(lines)-1]
+		}
+
+		newFileContents = append(contentBefore, newLines...)
+		newFileContents = append(newFileContents, contentAfter...)
 	}
 
-	output := strings.Join(fileContents, "\n")
-	err = ioutil.WriteFile(awsCredentialsFilePath, []byte(output), 0755)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	return strings.Join(newFileContents, "\n"), nil
 }

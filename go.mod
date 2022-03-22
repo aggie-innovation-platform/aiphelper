@@ -1,4 +1,4 @@
-module awsssohelper
+module aipssohelper
 
 go 1.17
 

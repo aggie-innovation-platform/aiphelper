@@ -1,0 +1,25 @@
+### BEGIN_AIPSSOHELPER ###
+
+{{range .AccountList}}
+
+# Account Name: {{.AccountName}}
+# Account Email: {{.EmailAddress}}
+[profile {{.NormalizedAccountName}}]
+sso_start_url = {{$.SSOStartURL}}
+sso_region = {{$.SSORegion}}
+sso_account_id = {{.AccountId}}
+sso_role_name = {{$.SSORoleName}}
+region = {{$.DefaultRegion}}
+output = {{$.DefaultFormat}}
+
+[profile {{.AccountId}}]
+sso_start_url = {{$.SSOStartURL}}
+sso_region = {{$.SSORegion}}
+sso_account_id = {{.AccountId}}
+sso_role_name = {{$.SSORoleName}}
+region = {{$.DefaultRegion}}
+output = {{$.DefaultFormat}}
+
+{{end}}
+
+### END_AIPSSOHELPER ###

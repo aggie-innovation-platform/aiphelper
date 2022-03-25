@@ -299,11 +299,6 @@ func updateSteampipeAwsConfigFile() {
 		log.Fatalln(err)
 	}
 
-	err = steampipeTemplate.Execute(&spcTemplateBuffer, steampipeTemplateData)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	output, _ := replaceFileSectionTemplate(string(input), spcTemplateBuffer.String())
 
 	err = ioutil.WriteFile(spcFilePath, []byte(output), 0755)

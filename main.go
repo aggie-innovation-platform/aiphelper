@@ -314,7 +314,7 @@ func replaceFileSectionTemplate(fileContents string, newSection string) (string,
 	beginLine, endLine := -1, -1
 
 	for i, line := range lines {
-		if line == fmt.Sprintf("### BEGIN_%s ###", templateSectionMarker) {
+		if beginLine == -1 && line == fmt.Sprintf("### BEGIN_%s ###", templateSectionMarker) {
 			beginLine = i
 		}
 		if line == fmt.Sprintf("### END_%s ###", templateSectionMarker) {

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -104,56 +105,79 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	// create sso oidc client to trigger login flow
-	ssooidcClient := ssooidc.NewFromConfig(cfg)
+
+	token, err := searchForSsoCachedCredentials(awsTemplateData.SSOStartURL, awsTemplateData.SSORegion)
 	if err != nil {
-		fmt.Println(err)
+		// create sso oidc client to trigger login flow
+		ssooidcClient := ssooidc.NewFromConfig(cfg)
+		if err != nil {
+			fmt.Println(err)
+		}
+		// register your client which is triggering the login flow
+		register, err := ssooidcClient.RegisterClient(context.TODO(), &ssooidc.RegisterClientInput{
+			ClientName: aws.String("aip/awsssohelper"),
+			ClientType: aws.String("public"),
+			Scopes:     []string{"sso-portal:*"},
+		})
+		if err != nil {
+			fmt.Println(err)
+		}
+		// authorize your device using the client registration response
+		deviceAuth, err := ssooidcClient.StartDeviceAuthorization(context.TODO(), &ssooidc.StartDeviceAuthorizationInput{
+			ClientId:     register.ClientId,
+			ClientSecret: register.ClientSecret,
+			StartUrl:     aws.String(awsTemplateData.SSOStartURL),
+		})
+		if err != nil {
+			fmt.Println(err)
+		}
+		// trigger OIDC login. open browser to login. close tab once login is done. press enter to continue
+		url := aws.ToString(deviceAuth.VerificationUriComplete)
+		fmt.Printf("If browser is not opened automatically, please open link:\n%v\n", url)
+		err = browser.OpenURL(url)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println("Press ENTER key once login is done")
+		_ = bufio.NewScanner(os.Stdin).Scan()
+		// generate sso token
+		newToken, err := ssooidcClient.CreateToken(context.TODO(), &ssooidc.CreateTokenInput{
+			ClientId:     register.ClientId,
+			ClientSecret: register.ClientSecret,
+			DeviceCode:   deviceAuth.DeviceCode,
+			GrantType:    aws.String("urn:ietf:params:oauth:grant-type:device_code"),
+		})
+		if err != nil {
+			fmt.Println(err)
+		}
+		token = *newToken.AccessToken
+
+		var now = time.Now()
+		var exp = now.Add(time.Second * time.Duration(newToken.ExpiresIn))
+		ssoCacheFile := SSOCachedCredential{
+			AccessToken: token,
+			Region:      awsTemplateData.SSORegion,
+			StartUrl:    awsTemplateData.SSOStartURL,
+			ExpiresAt:   exp.UTC(),
+		}
+		fmt.Printf("Time now: %s, time with %d seconds added: %s", now.String(), time.Duration(newToken.ExpiresIn), exp.UTC().Format(time.RFC3339))
+
+		if err := putSsoCachedCredentials(ssoCacheFile); err != nil {
+			log.Printf("Error occurred writing the credentials to cache: %s", err)
+		}
+	} else {
+		fmt.Println("Using existing access token in SSO cache")
 	}
-	// register your client which is triggering the login flow
-	register, err := ssooidcClient.RegisterClient(context.TODO(), &ssooidc.RegisterClientInput{
-		ClientName: aws.String("aip/awsssohelper"),
-		ClientType: aws.String("public"),
-		Scopes:     []string{"sso-portal:*"},
-	})
-	if err != nil {
-		fmt.Println(err)
-	}
-	// authorize your device using the client registration response
-	deviceAuth, err := ssooidcClient.StartDeviceAuthorization(context.TODO(), &ssooidc.StartDeviceAuthorizationInput{
-		ClientId:     register.ClientId,
-		ClientSecret: register.ClientSecret,
-		StartUrl:     aws.String(awsTemplateData.SSOStartURL),
-	})
-	if err != nil {
-		fmt.Println(err)
-	}
-	// trigger OIDC login. open browser to login. close tab once login is done. press enter to continue
-	url := aws.ToString(deviceAuth.VerificationUriComplete)
-	fmt.Printf("If browser is not opened automatically, please open link:\n%v\n", url)
-	err = browser.OpenURL(url)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("Press ENTER key once login is done")
-	_ = bufio.NewScanner(os.Stdin).Scan()
-	// generate sso token
-	token, err := ssooidcClient.CreateToken(context.TODO(), &ssooidc.CreateTokenInput{
-		ClientId:     register.ClientId,
-		ClientSecret: register.ClientSecret,
-		DeviceCode:   deviceAuth.DeviceCode,
-		GrantType:    aws.String("urn:ietf:params:oauth:grant-type:device_code"),
-	})
-	if err != nil {
-		fmt.Println(err)
-	}
+
 	// create sso client
 	ssoClient := sso.NewFromConfig(cfg)
 	// list accounts
 	fmt.Print("Fetching list of all accounts... ")
 
 	accountPaginator := sso.NewListAccountsPaginator(ssoClient, &sso.ListAccountsInput{
-		AccessToken: token.AccessToken,
+		AccessToken: &token,
 	})
+
 	for accountPaginator.HasMorePages() {
 		x, err := accountPaginator.NextPage(context.TODO())
 		if err != nil {

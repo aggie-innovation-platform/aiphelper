@@ -189,7 +189,6 @@ func main() {
 			StartUrl:    awsTemplateData.SSOStartURL,
 			ExpiresAt:   exp.UTC(),
 		}
-		fmt.Printf("Time now: %s, time with %d seconds added: %s", now.String(), time.Duration(token.ExpiresIn), exp.UTC().Format(time.RFC3339))
 
 		if err := putSsoCachedCredentials(ssoCacheFile); err != nil {
 			log.Printf("Error occurred writing the credentials to cache: %s", err)
@@ -329,7 +328,6 @@ func replaceFileSectionTemplate(fileContents string, newSection string) (string,
 		newFileContents = append(lines, newLines...)
 	} else {
 		// Replace block in file
-		// fmt.Println("Replacing block")
 		contentBefore := lines[0:beginLine]
 		contentAfter := []string{}
 		if len(lines) > endLine+1 {

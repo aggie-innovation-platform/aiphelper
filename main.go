@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sso"
 	ssotypes "github.com/aws/aws-sdk-go-v2/service/sso/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssooidc"
+	ssooidctypes "github.com/aws/aws-sdk-go-v2/service/ssooidc/types"
 	"github.com/pkg/browser"
 )
 
@@ -106,7 +107,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	token, err := searchForSsoCachedCredentials(awsTemplateData.SSOStartURL, awsTemplateData.SSORegion)
+	accessToken, err := searchForSsoCachedCredentials(awsTemplateData.SSOStartURL, awsTemplateData.SSORegion)
 	if err != nil {
 		// create sso oidc client to trigger login flow
 		ssooidcClient := ssooidc.NewFromConfig(cfg)
@@ -131,36 +132,64 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		// trigger OIDC login. open browser to login. close tab once login is done. press enter to continue
+
+		// trigger OIDC login. open browser to login. begin polling for token. close tab once login is done.
 		url := aws.ToString(deviceAuth.VerificationUriComplete)
 		fmt.Printf("If browser is not opened automatically, please open link:\n%v\n", url)
 		err = browser.OpenURL(url)
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println("Press ENTER key once login is done")
-		_ = bufio.NewScanner(os.Stdin).Scan()
-		// generate sso token
-		newToken, err := ssooidcClient.CreateToken(context.TODO(), &ssooidc.CreateTokenInput{
-			ClientId:     register.ClientId,
-			ClientSecret: register.ClientSecret,
-			DeviceCode:   deviceAuth.DeviceCode,
-			GrantType:    aws.String("urn:ietf:params:oauth:grant-type:device_code"),
-		})
-		if err != nil {
-			fmt.Println(err)
+
+		// Wait for sso token
+		var token *ssooidc.CreateTokenOutput
+
+		var slowDownDelay = 5 * time.Second
+		var retryInterval = 5 * time.Second //default value
+
+		if i := deviceAuth.Interval; i > 0 {
+			retryInterval = time.Duration(i) * time.Second // acceptable value from AWS
 		}
-		token = *newToken.AccessToken
+
+		for {
+			tokenInput := ssooidc.CreateTokenInput{
+				ClientId:     register.ClientId,
+				ClientSecret: register.ClientSecret,
+				DeviceCode:   deviceAuth.DeviceCode,
+				GrantType:    aws.String("urn:ietf:params:oauth:grant-type:device_code"),
+			}
+			newToken, err := ssooidcClient.CreateToken(context.TODO(), &tokenInput)
+
+			if err != nil {
+				// fmt.Printf("Got oidc error: %v\n", err)
+				var sde *ssooidctypes.SlowDownException
+				if errors.As(err, &sde) {
+					retryInterval += slowDownDelay
+				}
+
+				var ape *ssooidctypes.AuthorizationPendingException
+				if errors.As(err, &ape) {
+					// fmt.Printf("Waiting %d seconds before trying again\n", retryInterval)
+					time.Sleep(retryInterval)
+					continue
+				}
+				log.Fatal(err)
+			} else {
+				token = newToken
+				accessToken = *token.AccessToken
+				break
+			}
+		}
 
 		var now = time.Now()
-		var exp = now.Add(time.Second * time.Duration(newToken.ExpiresIn))
+		var exp = now.Add(time.Second * time.Duration(token.ExpiresIn))
 		ssoCacheFile := SSOCachedCredential{
-			AccessToken: token,
+			AccessToken: accessToken,
 			Region:      awsTemplateData.SSORegion,
 			StartUrl:    awsTemplateData.SSOStartURL,
 			ExpiresAt:   exp.UTC(),
 		}
-		fmt.Printf("Time now: %s, time with %d seconds added: %s", now.String(), time.Duration(newToken.ExpiresIn), exp.UTC().Format(time.RFC3339))
+		fmt.Printf("Time now: %s, time with %d seconds added: %s", now.String(), time.Duration(token.ExpiresIn), exp.UTC().Format(time.RFC3339))
 
 		if err := putSsoCachedCredentials(ssoCacheFile); err != nil {
 			log.Printf("Error occurred writing the credentials to cache: %s", err)
@@ -175,7 +204,7 @@ func main() {
 	fmt.Print("Fetching list of all accounts... ")
 
 	accountPaginator := sso.NewListAccountsPaginator(ssoClient, &sso.ListAccountsInput{
-		AccessToken: &token,
+		AccessToken: &accessToken,
 	})
 
 	for accountPaginator.HasMorePages() {

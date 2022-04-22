@@ -5,6 +5,7 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/tamu-edu/aiphelper/aws"
+	"github.com/tamu-edu/aiphelper/azure"
 	"github.com/tamu-edu/aiphelper/config"
 )
 
@@ -24,5 +25,7 @@ func main() {
 	switch p.Active.Name {
 	case "aws":
 		aws.Init(arguments)
+	case "azure":
+		azure.Init(arguments)
 	}
 }

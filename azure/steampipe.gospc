@@ -1,0 +1,19 @@
+### AIPHELPER_MARKER_START ###
+
+connection "azure_all" {
+  plugin      = "azure"
+  type        = "aggregator"
+  connections = [{{.AggregationString}}]
+}
+
+{{range .Subscriptions}}
+# Subscription Name: {{.Name}}
+# ID: {{.ID}}
+connection "azure_{{.NormalizedName}}" {
+  plugin    = "azure"
+  tenant_id = "{{$.TenantID}}"
+  subscription_id = "{{.ID}}"
+}
+{{end}}
+
+### AIPHELPER_MARKER_END ###

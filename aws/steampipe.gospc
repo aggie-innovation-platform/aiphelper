@@ -1,4 +1,4 @@
-### BEGIN_AIPSSOHELPER ###
+### {{$.Marker}}_START ###
 
 connection "aws_all" {
   plugin      = "aws"
@@ -23,7 +23,6 @@ connection "aws_{{.NormalizedAccountName}}" {
   regions   = [{{$.RegionsString}}]
   {{- end }}
 }
-
 {{end}}
 
-### END_AIPSSOHELPER ###
+### {{$.Marker}}_END ###

@@ -25,7 +25,6 @@ import (
 	ssooidctypes "github.com/aws/aws-sdk-go-v2/service/ssooidc/types"
 	"github.com/pkg/browser"
 
-	"github.com/tamu-edu/aiphelper/config"
 	"github.com/tamu-edu/aiphelper/utils"
 )
 
@@ -50,7 +49,6 @@ type AWSAccountInfo struct {
 var (
 	awsTemplate       *template.Template
 	steampipeTemplate *template.Template
-	params            *config.AwsParameters
 
 	accounts              []AWSAccountInfo
 	steampipeTemplateData = SteampipeTemplateData{Marker: utils.Marker}
@@ -58,7 +56,7 @@ var (
 )
 
 type AWSTemplateData struct {
-	Params      *config.AwsParameters
+	Params      *Options
 	AccountList []AWSAccountInfo
 	Marker      string
 }
@@ -71,12 +69,14 @@ type SteampipeTemplateData struct {
 	Marker            string
 }
 
-func Init(args *config.Parameters) {
+func Init() {
+
 	awsTemplate = template.Must(template.New("awsTemplate").Parse(awsTemplateString))
 	steampipeTemplate = template.Must(template.New("steampipeTemplate").Parse(steampipeTemplateString))
 
-	params = &args.Aws
-	awsTemplateData.Params = &args.Aws
+	//steampipeTemplateData.RegionsString = "\"" + strings.Join(regions, "\", \"") + "\""
+
+	awsTemplateData.Params = options
 
 	// fmt.Println(args.Aws.Accounts)
 	// if args.Aws.SSOStartURL == "" || args.Aws.SSORegion == "" {
@@ -88,17 +88,17 @@ func Init(args *config.Parameters) {
 	// 	regions = strings.Split(regionsInput, ",")
 	// }
 
-	if len(params.Accounts) > 0 {
-		for _, accountID := range params.Accounts {
-			accounts = append(accounts,
-				AWSAccountInfo{
-					AccountInfo: ssotypes.AccountInfo{
-						AccountId: &accountID,
-					},
-				},
-			)
-		}
-	}
+	// if len(params.Accounts) > 0 {
+	// 	for _, accountID := range params.Accounts {
+	// 		accounts = append(accounts,
+	// 			AWSAccountInfo{
+	// 				AccountInfo: ssotypes.AccountInfo{
+	// 					AccountId: &accountID,
+	// 				},
+	// 			},
+	// 		)
+	// 	}
+	// }
 
 	accessToken, cfg, err := authenticate()
 	if err != nil {
@@ -139,12 +139,12 @@ func Init(args *config.Parameters) {
 
 func authenticate() (string, aws.Config, error) {
 	// load default aws config
-	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(), awsconfig.WithRegion(params.SSORegion))
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(), awsconfig.WithRegion(options.SSORegion))
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	accessToken, err := searchForSsoCachedCredentials(params.SSOStartURL, params.SSORegion)
+	accessToken, err := searchForSsoCachedCredentials(options.SSOStartURL, options.SSORegion)
 	if err != nil {
 		// create sso oidc client to trigger login flow
 		ssooidcClient := ssooidc.NewFromConfig(cfg)
@@ -164,7 +164,7 @@ func authenticate() (string, aws.Config, error) {
 		deviceAuth, err := ssooidcClient.StartDeviceAuthorization(context.TODO(), &ssooidc.StartDeviceAuthorizationInput{
 			ClientId:     register.ClientId,
 			ClientSecret: register.ClientSecret,
-			StartUrl:     aws.String(params.SSOStartURL),
+			StartUrl:     aws.String(options.SSOStartURL),
 		})
 		if err != nil {
 			fmt.Println(err)
@@ -222,8 +222,8 @@ func authenticate() (string, aws.Config, error) {
 		var exp = now.Add(time.Second * time.Duration(token.ExpiresIn))
 		ssoCacheFile := SSOCachedCredential{
 			AccessToken: accessToken,
-			Region:      params.SSORegion,
-			StartUrl:    params.SSOStartURL,
+			Region:      options.SSORegion,
+			StartUrl:    options.SSOStartURL,
 			ExpiresAt:   exp.UTC(),
 		}
 
@@ -262,7 +262,9 @@ func updateSteampipeAwsConfigFile() {
 	var err error = nil
 
 	steampipeTemplateData.AccountList = accounts
-	steampipeTemplateData.RegionsString = strings.Join(params.Regions, "\", \"")
+
+	steampipeTemplateData.RegionsString = strings.Join(options.Regions.All, "\", \"")
+
 	for _, account := range accounts {
 		steampipeTemplateData.AllAccountsString = steampipeTemplateData.AllAccountsString + "\"aws_" + *account.AccountId + "\", "
 	}

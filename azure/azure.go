@@ -13,7 +13,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanagementgroups"
-	"github.com/tamu-edu/aiphelper/config"
+	"github.com/jessevdk/go-flags"
 	"github.com/tamu-edu/aiphelper/utils"
 )
 
@@ -22,12 +22,18 @@ var steampipeTemplateString string
 
 var (
 	steampipeTemplate *template.Template
-	params            *config.AzureParameters
+	options           *Options
 	cred              *azidentity.DefaultAzureCredential
 
 	subscriptions         []Subscription
 	steampipeTemplateData = SteampipeTemplateData{Marker: utils.Marker}
 )
+
+type Options struct {
+	TenantID            string `long:"tenant-id" default:"68f381e3-46da-47b9-ba57-6f322b8f0da1" description:"Azure Tenant ID"`
+	RootManagementGroup string `long:"root-group" short:"g" default:"tamu" description:"management group IDs to begin search for subscriptions"`
+	// ExcludeManagementGroups []string `long:"exclude-groups" short:"e" default:"sandbox" description:"comma-separated list of one or more nested management group IDs to exclude"`
+}
 
 type Subscription struct {
 	Name           string
@@ -42,8 +48,12 @@ type SteampipeTemplateData struct {
 	Marker            string
 }
 
-func Init(args *config.Parameters) {
-	params = &args.Azure
+func AddCommand(p *flags.Parser) {
+	options = &Options{}
+	p.AddCommand("azure", "Initialize Azure", "Initialize Azure", options)
+}
+
+func Init() {
 	steampipeTemplate = template.Must(template.New("steampipeTemplate").Parse(steampipeTemplateString))
 
 	err := authenticate()
@@ -79,7 +89,7 @@ func enumSubscriptions() ([]Subscription, error) {
 		log.Fatalf("failed to create client: %v", err)
 		return nil, err
 	}
-	pager := client.NewGetDescendantsPager(params.RootManagementGroup, nil)
+	pager := client.NewGetDescendantsPager(options.RootManagementGroup, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -92,7 +102,7 @@ func enumSubscriptions() ([]Subscription, error) {
 				// log.Printf("Skipping %s", *v.Properties.DisplayName)
 				var subscription = Subscription{
 					Name:           *v.Properties.DisplayName,
-					ID:             *v.ID,
+					ID:             *v.Name,
 					NormalizedName: utils.SnakeCase(*v.Properties.DisplayName),
 				}
 				subscriptions = append(subscriptions, subscription)
@@ -108,7 +118,7 @@ func updateSteampipeAzureConfigFile() {
 	var spcTemplateBuffer bytes.Buffer
 	var err error = nil
 
-	steampipeTemplateData.TenantID = params.TenantID
+	steampipeTemplateData.TenantID = options.TenantID
 	steampipeTemplateData.Subscriptions, err = enumSubscriptions()
 	if err != nil {
 		log.Fatalf("failed to enumerate subscriptions: %v", err)
@@ -119,7 +129,6 @@ func updateSteampipeAzureConfigFile() {
 	}
 
 	steampipeTemplateData.AggregationString = strings.Trim(steampipeTemplateData.AggregationString, ", ")
-	log.Println(steampipeTemplateData.AggregationString)
 
 	err = steampipeTemplate.Execute(&spcTemplateBuffer, steampipeTemplateData)
 	if err != nil {
@@ -129,7 +138,6 @@ func updateSteampipeAzureConfigFile() {
 	homeDir, _ := os.UserHomeDir()
 	spcFilePath := filepath.Join(homeDir, ".steampipe/config/azure.spc")
 
-	fmt.Println(spcTemplateBuffer.String())
 	err = utils.CreateOrReplaceInFile(spcFilePath, spcTemplateBuffer.String())
 	if err != nil {
 		log.Fatalln(err)

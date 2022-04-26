@@ -17,6 +17,8 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sso"
@@ -121,6 +123,9 @@ func Init() {
 		}
 		for _, account := range x.AccountList {
 			account := AWSAccountInfo{AccountInfo: account}
+			if !slices.Contains(options.Accounts.All, *account.AccountId) {
+				continue
+			}
 			account.NormalizedAccountName = utils.SnakeCase(*account.AccountName)
 			accounts = append(accounts, account)
 		}

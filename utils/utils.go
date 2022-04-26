@@ -103,3 +103,8 @@ func CreateOrReplaceInFile(path string, replaceWith string) error {
 
 	return ioutil.WriteFile(path, []byte(output), 0755)
 }
+
+func SplitArgumentParser(value string) []string {
+	var delimiter = regexp.MustCompile("[, ] *")
+	return delimiter.Split(value, -1)
+}

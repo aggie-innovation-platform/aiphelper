@@ -4,6 +4,9 @@ connection "aws_all" {
   plugin      = "aws"
   type        = "aggregator"
   connections = [{{.AllAccountsString}}]
+  {{- if ne $.RegionsString "" }}
+  regions   = ["{{$.RegionsString}}"]
+  {{- end }}
 }
 
 {{range .AccountList}}
@@ -13,7 +16,7 @@ connection "aws_{{.AccountId}}" {
   plugin    = "aws"
   profile   = "{{.AccountId}}"
   {{- if ne $.RegionsString "" }}
-  regions   = [{{$.RegionsString}}]
+  regions   = ["{{$.RegionsString}}"]
   {{- end }}
 }
 connection "aws_{{.NormalizedAccountName}}" {

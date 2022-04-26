@@ -76,31 +76,7 @@ func Init() {
 	awsTemplate = template.Must(template.New("awsTemplate").Parse(awsTemplateString))
 	steampipeTemplate = template.Must(template.New("steampipeTemplate").Parse(steampipeTemplateString))
 
-	//steampipeTemplateData.RegionsString = "\"" + strings.Join(regions, "\", \"") + "\""
-
 	awsTemplateData.Params = options
-
-	// fmt.Println(args.Aws.Accounts)
-	// if args.Aws.SSOStartURL == "" || args.Aws.SSORegion == "" {
-	// 	flag.Usage()
-	// 	os.Exit(1)
-	// }
-
-	// if regionsInput != "" {
-	// 	regions = strings.Split(regionsInput, ",")
-	// }
-
-	// if len(params.Accounts) > 0 {
-	// 	for _, accountID := range params.Accounts {
-	// 		accounts = append(accounts,
-	// 			AWSAccountInfo{
-	// 				AccountInfo: ssotypes.AccountInfo{
-	// 					AccountId: &accountID,
-	// 				},
-	// 			},
-	// 		)
-	// 	}
-	// }
 
 	accessToken, cfg, err := authenticate()
 	if err != nil {

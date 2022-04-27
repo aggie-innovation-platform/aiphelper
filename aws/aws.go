@@ -99,7 +99,7 @@ func Init() {
 		}
 		for _, account := range x.AccountList {
 			account := AWSAccountInfo{AccountInfo: account}
-			if !slices.Contains(options.Accounts.All, *account.AccountId) {
+			if len(options.Accounts.All) > 0 && !slices.Contains(options.Accounts.All, *account.AccountId) {
 				continue
 			}
 			account.NormalizedAccountName = utils.SnakeCase(*account.AccountName)

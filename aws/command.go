@@ -44,6 +44,10 @@ func (r *Regions) UnmarshalFlag(arg string) {
 }
 
 func (a *Accounts) UnmarshalFlag(arg string) error {
+	if arg == "" {
+		a.All = []string{}
+		return nil
+	}
 	var tempValue = utils.SplitArgumentParser(arg)
 	if len(tempValue) == 0 {
 		return errors.New("invalid account list")

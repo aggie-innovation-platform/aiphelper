@@ -1,4 +1,4 @@
-### AIPHELPER_MARKER_START ###
+### {{$.Marker}}_START ###
 
 connection "azure_all" {
   plugin      = "azure"
@@ -16,4 +16,4 @@ connection "azure_{{.NormalizedName}}" {
 }
 {{end}}
 
-### AIPHELPER_MARKER_END ###
+### {{$.Marker}}_END ###

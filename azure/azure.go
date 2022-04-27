@@ -13,7 +13,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanagementgroups"
-	"github.com/jessevdk/go-flags"
 	"github.com/tamu-edu/aiphelper/utils"
 )
 
@@ -29,12 +28,6 @@ var (
 	steampipeTemplateData = SteampipeTemplateData{Marker: utils.Marker}
 )
 
-type Options struct {
-	TenantID            string `long:"tenant-id" default:"68f381e3-46da-47b9-ba57-6f322b8f0da1" description:"Azure Tenant ID"`
-	RootManagementGroup string `long:"root-group" short:"g" default:"tamu" description:"management group IDs to begin search for subscriptions"`
-	// ExcludeManagementGroups []string `long:"exclude-groups" short:"e" default:"sandbox" description:"comma-separated list of one or more nested management group IDs to exclude"`
-}
-
 type Subscription struct {
 	Name           string
 	ID             string
@@ -46,11 +39,6 @@ type SteampipeTemplateData struct {
 	Subscriptions     []Subscription
 	TenantID          string
 	Marker            string
-}
-
-func AddCommand(p *flags.Parser) {
-	options = &Options{}
-	p.AddCommand("azure", "Initialize Azure", "Initialize Azure", options)
 }
 
 func Init() {

@@ -8,6 +8,7 @@ import (
 	"github.com/tamu-edu/aiphelper/azure"
 )
 
+// https://lightstep.com/blog/getting-real-with-command-line-arguments-and-goflags/
 // var (
 // 	arguments = new(config.Parameters)
 // )

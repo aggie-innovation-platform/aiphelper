@@ -26,7 +26,8 @@ Available commands:
 
 [azure command options]
           --tenant-id=  Azure Tenant ID (default: 68f381e3-46da-47b9-ba57-6f322b8f0da1)
-      -g, --root-group= management group IDs to begin search for subscriptions (default: tamu)
+          -g, --enum-mgmt-group  Enumerate Azure Management Group descendants for a list of Subscriptions
+          --root-group=      management group IDs to begin search for subscriptions (default: tamu)
 ```
 
 Example usage:

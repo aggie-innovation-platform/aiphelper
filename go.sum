@@ -8,6 +8,8 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanage
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanagementgroups v0.6.0/go.mod h1:SoY/eDnXPi1TgNYBsWL9PGOwJR0xUf4zHL/fUnQHqDM=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions v0.4.0 h1:arwxbvtBrHnXWgSpkUM3Xt91S+PFtJE+PunpgQsTP2g=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions v0.4.0/go.mod h1:g/je51Xu64vPu7HriKvNaRMlJRZKBso6p0wGMCxju+s=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription v0.4.0 h1:Cw9+KN4wBGU89+QzWa1Tn36pc41WOv8eFcSHhQfREGo=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription v0.4.0/go.mod h1:x7oG47WN8toz8Bk9ccxyqt8JvA3Bql1vfl+P39lxMA8=
 github.com/AzureAD/microsoft-authentication-library-for-go v0.4.0 h1:WVsrXCnHlDDX8ls+tootqRE87/hL9S/g4ewig9RsD/c=
 github.com/AzureAD/microsoft-authentication-library-for-go v0.4.0/go.mod h1:Vt9sXTKwMyGcOxSmLDMnGPgqsUg7m8pe215qMLrDXw4=
 github.com/aws/aws-sdk-go-v2 v1.13.0 h1:1XIXAfxsEmbhbj5ry3D3vX+6ZcUYvIqSm4CWWEuGZCA=

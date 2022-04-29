@@ -13,6 +13,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanagementgroups"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
 	"github.com/tamu-edu/aiphelper/utils"
 )
 
@@ -66,7 +67,36 @@ func authenticate() error {
 	return nil
 }
 
-func enumSubscriptions() ([]Subscription, error) {
+func enumSubscriptionsForCurrentUser() ([]Subscription, error) {
+	subscriptions := []Subscription{}
+	var err error
+
+	ctx := context.Background()
+	client, err := armsubscription.NewSubscriptionsClient(cred, nil)
+	if err != nil {
+		log.Fatalf("failed to create client: %v", err)
+		return nil, err
+	}
+	pager := client.NewListPager(nil)
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			log.Fatalf("failed to advance page: %v", err)
+			return nil, err
+		}
+		for _, v := range nextResult.Value {
+			var subscription = Subscription{
+				Name:           *v.DisplayName,
+				ID:             *v.ID,
+				NormalizedName: utils.SnakeCase(*v.DisplayName),
+			}
+			subscriptions = append(subscriptions, subscription)
+		}
+	}
+	return subscriptions, nil
+}
+
+func enumSubscriptionsByMgmtGroup() ([]Subscription, error) {
 
 	subscriptions := []Subscription{}
 	var err error
@@ -107,7 +137,15 @@ func updateSteampipeAzureConfigFile() {
 	var err error = nil
 
 	steampipeTemplateData.TenantID = options.TenantID
-	steampipeTemplateData.Subscriptions, err = enumSubscriptions()
+
+	if options.EnumManagementGroup == true {
+		steampipeTemplateData.Subscriptions, err = enumSubscriptionsByMgmtGroup()
+	} else {
+		steampipeTemplateData.Subscriptions, err = enumSubscriptionsForCurrentUser()
+	}
+
+	fmt.Printf("User has access to %d Azure subscriptions.\n", len(steampipeTemplateData.Subscriptions))
+
 	if err != nil {
 		log.Fatalf("failed to enumerate subscriptions: %v", err)
 	}

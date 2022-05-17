@@ -87,7 +87,7 @@ func enumSubscriptionsForCurrentUser() ([]Subscription, error) {
 		for _, v := range nextResult.Value {
 			var subscription = Subscription{
 				Name:           *v.DisplayName,
-				ID:             *v.ID,
+				ID:             *v.SubscriptionID,
 				NormalizedName: utils.SnakeCase(*v.DisplayName),
 			}
 			subscriptions = append(subscriptions, subscription)

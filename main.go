@@ -17,7 +17,7 @@ import (
 var Version = "development"
 
 var opts struct {
-	Version bool `long:"version" description:"aiphelper Version"`
+	Version bool `long:"version" short:"V" description:"aiphelper Version"`
 }
 
 func main() {

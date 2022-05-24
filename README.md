@@ -8,6 +8,9 @@ This utility helps set up various CLI tools with access to multiple cloud accoun
 Usage:
   main [OPTIONS] <aws | azure>
 
+Application Options:
+  -V, --version  aiphelper Version
+
 Help Options:
   -h, --help  Show this help message
 

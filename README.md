@@ -28,9 +28,10 @@ Available commands:
           --default-region= Default region for AWS CLI operations (default: us-east-1)
 
 [azure command options]
-          --tenant-id=  Azure Tenant ID (default: 68f381e3-46da-47b9-ba57-6f322b8f0da1)
-          -g, --enum-mgmt-group  Enumerate Azure Management Group descendants for a list of Subscriptions
+          --tenant-id=       Azure Tenant ID (default: 68f381e3-46da-47b9-ba57-6f322b8f0da1)
+      -g, --enum-mgmt-group  Enumerate Azure Management Group descendants for a list of Subscriptions
           --root-group=      management group IDs to begin search for subscriptions (default: tamu)
+          --auth-method=     Authentication method to use. Options: [environment, cli, managed-identity, device-code, default] (default: default)
 ```
 
 Example usage:
@@ -55,9 +56,11 @@ If you already have an AWS CLI SSO token that matches the SSO URL and region, it
 
 ## Azure
 
-`aiphelper` requires Azure to already be authenticated and will use a series of locations to look for credentials: environment variables, a managed identity, or the azure CLI. To learn more, see [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#readme-defaultazurecredential).
+`aiphelper` requires Azure to already be authenticated and by default will use a series of locations to look for credentials: environment variables, a managed identity, or the azure CLI. To learn more, see [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#readme-defaultazurecredential).
 
 The easiest way to get started is to use the `az login` command to authenticate the azure CLI with Azure.
+
+If you need to specify an authentication method, such as to use CLI or ENV credentials on an Azure VM with a managed identity, use the `--auth-method` option.
 
 ## Steampipe
 

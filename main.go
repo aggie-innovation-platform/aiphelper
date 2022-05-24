@@ -24,20 +24,16 @@ func main() {
 
 	p := flags.NewParser(&opts, flags.Default)
 
+	aws.AddCommand(p)
+	azure.AddCommand(p)
+
 	_, err := p.Parse()
-	if err != nil {
-		os.Exit(-1)
-	}
 
 	if opts.Version == true {
 		fmt.Printf("Version: %s\n", Version)
 		os.Exit(0)
 	}
 
-	aws.AddCommand(p)
-	azure.AddCommand(p)
-
-	_, err = p.Parse()
 	if err != nil {
 		os.Exit(-1)
 	}

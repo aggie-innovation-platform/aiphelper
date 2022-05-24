@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanagementgroups"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
@@ -21,10 +22,9 @@ import (
 var steampipeTemplateString string
 
 var (
-	steampipeTemplate *template.Template
-	options           *Options
-	cred              *azidentity.DefaultAzureCredential
-
+	steampipeTemplate     *template.Template
+	options               *Options
+	cred                  azcore.TokenCredential
 	subscriptions         []Subscription
 	steampipeTemplateData = SteampipeTemplateData{Marker: utils.Marker}
 )
@@ -59,9 +59,20 @@ func Init() {
 func authenticate() error {
 	var err error
 
-	cred, err = azidentity.NewDefaultAzureCredential(nil)
+	switch method := options.AuthenticationMethod; method {
+	case "environment":
+		cred, err = azidentity.NewEnvironmentCredential(nil)
+	case "cli":
+		cred, err = azidentity.NewAzureCLICredential(nil)
+	case "managed-identity":
+		cred, err = azidentity.NewDeviceCodeCredential(nil)
+	case "device-code":
+		cred, err = azidentity.NewDeviceCodeCredential(nil)
+	default:
+		cred, err = azidentity.NewDefaultAzureCredential(nil)
+	}
 	if err != nil {
-		log.Fatalln("Failed to locate Azure credentials.\nBefore running this utility, please use `az login` or environment variables to make credentials available in the current environment.")
+		log.Fatalln("Failed to locate Azure credentials.\nPlease check your authentication method. If using the default authentication method, please use `az login` or environment variables to make credentials available in the current environment.")
 		return err
 	}
 	return nil

@@ -27,3 +27,4 @@ jobs:
           goarch: ${{ matrix.goarch }}
           retry: 10
           overwrite: true
+          ldflags: -X "main.Version=${{ github.event.release.tag_name }} (${{ github.sha }})"

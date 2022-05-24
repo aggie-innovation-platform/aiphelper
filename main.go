@@ -22,7 +22,7 @@ var opts struct {
 
 func main() {
 
-	p := flags.NewParser(&opts, flags.Default)
+	p := flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash)
 
 	aws.AddCommand(p)
 	azure.AddCommand(p)
@@ -35,6 +35,7 @@ func main() {
 	}
 
 	if err != nil {
+		fmt.Println(err)
 		os.Exit(-1)
 	}
 

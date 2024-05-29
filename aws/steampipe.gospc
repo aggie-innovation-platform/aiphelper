@@ -22,9 +22,7 @@ connection "aws_{{.AccountId}}" {
 connection "aws_{{.NormalizedAccountName}}" {
   plugin    = "aws"
   profile   = "{{.NormalizedAccountName}}"
-  {{- if ne $.RegionsString "" }}
-  regions   = [{{$.RegionsString}}]
-  {{- end }}
+  regions   = ["{{$.RegionsString}}"]
 }
 {{end}}
 
